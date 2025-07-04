@@ -48,7 +48,9 @@
 #include <sys/wait.h>
 
 #if defined(__FreeBSD__)
+__BEGIN_DECLS
 extern char **environ;
+__END_DECLS
 #endif
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
