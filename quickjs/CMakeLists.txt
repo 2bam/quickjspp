@@ -15,7 +15,7 @@ set(quickjs_def CONFIG_VERSION="${version}" _GNU_SOURCE CONFIG_BIGNUM)
 
 add_library(quickjs ${quickjs_src})
 target_compile_definitions(quickjs PRIVATE ${quickjs_def} )
-set_target_properties(quickjs PROPERTIES PUBLIC_HEADER "quickjs/quickjs.h;quickjs/quickjs-libc.h")
+set_target_properties(quickjs PROPERTIES PUBLIC_HEADER "quickjs.h;quickjs-libc.h")
 
 add_library(quickjs-dumpleaks ${quickjs_src})
 target_compile_definitions(quickjs-dumpleaks PRIVATE ${quickjs_def} DUMP_LEAKS=1)

@@ -13,7 +13,7 @@ add_subdirectory(quickjs)
 add_library(quickjspp INTERFACE)
 target_link_libraries(quickjspp INTERFACE quickjs ${CMAKE_REQUIRED_LIBRARIES})
 target_compile_features(quickjspp INTERFACE cxx_std_17)
-target_include_directories(quickjspp INTERFACE .)
+target_include_directories(quickjspp INTERFACE . ./quickjs)
 set_target_properties(quickjspp PROPERTIES PUBLIC_HEADER quickjspp.hpp)
 
 add_executable(qjs qjs.cpp)
