@@ -1,5 +1,5 @@
 #include "quickjspp.hpp"
-#include "quickjs/quickjs-libc.h"
+#include "quickjs/quickjs/quickjs-libc.h"
 
 #include <iostream>
 #include <string_view>
@@ -18,7 +18,7 @@ static JSContext *JS_NewCustomContext(JSRuntime *rt)
     return ctx;
 }
 
-int main(int argc, char ** argv)
+int main(int argc, char **argv)
 {
     qjs::Runtime runtime;
     auto rt = runtime.rt;
@@ -35,13 +35,13 @@ int main(int argc, char ** argv)
     int flags = -1;
     int optind = 1;
     // load as ES6 module
-    if(argv[optind] && (argv[optind] == std::string_view{"-m"} || argv[optind] == std::string_view{"--module"}))
+    if (argv[optind] && (argv[optind] == std::string_view{"-m"} || argv[optind] == std::string_view{"--module"}))
     {
         flags = JS_EVAL_TYPE_MODULE;
         optind++;
     }
     // load as ES6 script
-    else if(argv[optind] && argv[optind] == std::string_view{"--script"})
+    else if (argv[optind] && argv[optind] == std::string_view{"--script"})
     {
         flags = JS_EVAL_TYPE_GLOBAL;
         optind++;
@@ -55,19 +55,19 @@ int main(int argc, char ** argv)
         import * as os from 'os';
         globalThis.std = std;
         globalThis.os = os;
-    )xxx", "<input>", JS_EVAL_TYPE_MODULE);
-
+    )xxx",
+                 "<input>", JS_EVAL_TYPE_MODULE);
 
     try
     {
-        if(auto filename = argv[optind])
+        if (auto filename = argv[optind])
         {
             auto buf = qjs::detail::readFile(filename);
             if (!buf)
                 throw std::runtime_error{std::string{"can't read file: "} + filename};
 
             // autodetect file type
-            if(flags == -1)
+            if (flags == -1)
                 flags = JS_DetectModule(buf->data(), buf->size()) ? JS_EVAL_TYPE_MODULE : JS_EVAL_TYPE_GLOBAL;
 
             context.eval(*buf, filename, flags);
@@ -79,11 +79,11 @@ int main(int argc, char ** argv)
             return 1;
         }
     }
-    catch(qjs::exception & e)
+    catch (qjs::exception &e)
     {
         auto exc = e.get();
         std::cerr << (exc.isError() ? "Error: " : "Throw: ") << (std::string)exc << std::endl;
-        if((bool)exc["stack"])
+        if ((bool)exc["stack"])
             std::cerr << (std::string)exc["stack"] << std::endl;
 
         js_std_free_handlers(rt);
@@ -95,5 +95,4 @@ int main(int argc, char ** argv)
     js_std_free_handlers(rt);
 
     return 0;
-
 }

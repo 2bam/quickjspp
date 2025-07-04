@@ -1,7 +1,7 @@
-diff --git a/quickjs/quickjs-libc.c b/quickjs/quickjs-libc.c
+diff --git a/quickjs/quickjs/quickjs-libc.c b/quickjs/quickjs/quickjs-libc.c
 index 023d895..2387a45 100644
---- a/quickjs/quickjs-libc.c
-+++ b/quickjs/quickjs-libc.c
+--- a/quickjs/quickjs/quickjs-libc.c
++++ b/quickjs/quickjs/quickjs-libc.c
 @@ -48,7 +48,9 @@
  #include <sys/wait.h>
  

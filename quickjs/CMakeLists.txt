@@ -1,21 +1,21 @@
 project(quickjs LANGUAGES C)
 
-file(STRINGS VERSION version)
+file(STRINGS quickjs/VERSION version)
 
 set(quickjs_src 
-  cutils.c
-  dtoa.c
-  libregexp.c
-  libunicode.c
-  quickjs-libc.c
-  quickjs.c
+  quickjs/cutils.c
+  quickjs/dtoa.c
+  quickjs/libregexp.c
+  quickjs/libunicode.c
+  quickjs/quickjs-libc.c
+  quickjs/quickjs.c
 )
 
 set(quickjs_def CONFIG_VERSION="${version}" _GNU_SOURCE CONFIG_BIGNUM)
 
 add_library(quickjs ${quickjs_src})
 target_compile_definitions(quickjs PRIVATE ${quickjs_def} )
-set_target_properties(quickjs PROPERTIES PUBLIC_HEADER "quickjs.h;quickjs-libc.h")
+set_target_properties(quickjs PROPERTIES PUBLIC_HEADER "quickjs/quickjs.h;quickjs/quickjs-libc.h")
 
 add_library(quickjs-dumpleaks ${quickjs_src})
 target_compile_definitions(quickjs-dumpleaks PRIVATE ${quickjs_def} DUMP_LEAKS=1)
@@ -29,7 +29,7 @@ endif()
 # install
 include(GNUInstallDirs)
 install(TARGETS quickjs
-        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/quickjs
-        ARCHIVE       DESTINATION ${CMAKE_INSTALL_LIBDIR}/quickjs
-        LIBRARY       DESTINATION ${CMAKE_INSTALL_LIBDIR}/quickjs
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/quickjs/quickjs
+        ARCHIVE       DESTINATION ${CMAKE_INSTALL_LIBDIR}/quickjs/quickjs
+        LIBRARY       DESTINATION ${CMAKE_INSTALL_LIBDIR}/quickjs/quickjs
         )

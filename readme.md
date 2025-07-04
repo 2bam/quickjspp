@@ -1,5 +1,13 @@
 # In this fork
 
+## Use git subtree to update to the latest version
+
+I'll experiment with this setup for a bit until I had to merge some conflicts
+and see how it goes.
+
+- Moves quickjs to quickjs/quickjs to make a cleanish copy (besides patching)
+- Updates cmake files to work
+
 ## Update QuickJS dependency to version 2025-04-26. 
 
 Fix module loading to keep old API semantics.
