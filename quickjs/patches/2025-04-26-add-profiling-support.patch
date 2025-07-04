@@ -1,0 +1,387 @@
+#
+# Original by rubenlg
+# https://github.com/rubenlg/quickjs.git
+# commit 0b8d00444d6e444b8b3c1b27b5e201f2abd7be9f
+#
+# Updated by 2bam to be compatible with latest quickjs
+# Also removed "raw string" extension only compat with gcc
+#
+
+diff --git a/quickjs/quickjs/Makefile b/quickjs/quickjs/Makefile
+index 3b1c745..d18a759 100644
+--- a/quickjs/quickjs/Makefile
++++ b/quickjs/quickjs/Makefile
+@@ -54,6 +54,10 @@ PREFIX?=/usr/local
+ # use UB sanitizer
+ #CONFIG_UBSAN=y
+ 
++# Include code for profiling individual function calls.
++# qjs will produce a file compatible with chrome devtools and other tools.
++CONFIG_PROFILE_CALLS=y
++
+ OBJDIR=.obj
+ 
+ ifdef CONFIG_ASAN
+@@ -156,6 +160,9 @@ ifeq ($(shell $(CC) -o /dev/null compat/test-closefrom.c 2>/dev/null && echo 1),
+ DEFINES+=-DHAVE_CLOSEFROM
+ endif
+ endif
++ifdef CONFIG_PROFILE_CALLS
++DEFINES+=-DCONFIG_PROFILE_CALLS
++endif
+ 
+ CFLAGS+=$(DEFINES)
+ CFLAGS_DEBUG=$(CFLAGS) -O0
+diff --git a/quickjs/quickjs/qjs.c b/quickjs/quickjs/qjs.c
+index a88e39a..5aecd70 100644
+--- a/quickjs/quickjs/qjs.c
++++ b/quickjs/quickjs/qjs.c
+@@ -298,6 +298,10 @@ void help(void)
+            "    --std          make 'std' and 'os' available to the loaded script\n"
+            "-T  --trace        trace memory allocation\n"
+            "-d  --dump         dump the memory usage stats\n"
++#ifdef CONFIG_PROFILE_CALLS
++           "-p  --profile FILE dump the profiling stats to FILENAME in a format that can be open in chromium devtools\n"
++           "    --profile-sampling n collect function calls every 1/n times. Defaults to 1 (i.e. every call)\n"
++#endif
+            "    --memory-limit n  limit the memory usage to 'n' bytes (SI suffixes allowed)\n"
+            "    --stack-size n    limit the stack size to 'n' bytes (SI suffixes allowed)\n"
+            "    --no-unhandled-rejection  ignore unhandled promise rejections\n"
+@@ -307,6 +311,39 @@ void help(void)
+     exit(1);
+ }
+ 
++#ifdef CONFIG_PROFILE_CALLS
++void profile_function_start(JSContext *ctx, JSAtom func, JSAtom filename, void *opaque) {
++    const char* func_str = JS_AtomToCString(ctx, func);
++    const char *func_str2 = func_str[0] ? func_str : "<anonymous>";
++    FILE *logfile = (FILE *)opaque;
++    // Format documented here:
++    // https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview?tab=t.0#heading=h.yr4qxyxotyw
++    fprintf(logfile, "{"
++            "\"name\": \"%s\","
++            "\"cat\": \"js\","
++            "\"ph\": \"B\","
++            "\"ts\": %ld,"
++            "\"pid\": 1,"
++            "\"tid\": 1"
++        "},\n", func_str2, clock());
++    JS_FreeCString(ctx, func_str);
++}
++void profile_function_end(JSContext *ctx, JSAtom func, JSAtom filename, void *opaque) {
++    const char* func_str = JS_AtomToCString(ctx, func);
++    const char *func_str2 = func_str[0] ? func_str : "<anonymous>";
++    FILE *logfile = (FILE *)opaque;
++    fprintf(logfile, "{"
++            "\"name\": \"%s\","
++            "\"cat\": \"js\","
++            "\"ph\": \"E\","
++            "\"ts\": %ld,"
++            "\"pid\": 1,"
++            "\"tid\": 1"
++        "},\n", func_str2, clock());
++    JS_FreeCString(ctx, func_str);
++}
++#endif
++
+ int main(int argc, char **argv)
+ {
+     JSRuntime *rt;
+@@ -317,6 +354,10 @@ int main(int argc, char **argv)
+     int interactive = 0;
+     int dump_memory = 0;
+     int trace_memory = 0;
++#ifdef CONFIG_PROFILE_CALLS
++    FILE *profile_file = NULL;
++    uint32_t profile_sampling = 1;
++#endif
+     int empty_run = 0;
+     int module = -1;
+     int load_std = 0;
+@@ -396,6 +437,29 @@ int main(int argc, char **argv)
+                 trace_memory++;
+                 continue;
+             }
++#ifdef CONFIG_PROFILE_CALLS
++            if (opt == 'p' || !strcmp(longopt, "profile")) {
++                if (*arg) {
++                    profile_file = fopen(arg, "w");
++                    break;
++                }
++                if (optind < argc) {
++                    profile_file = fopen(argv[optind++], "w");
++                    break;
++                }
++                fprintf(stderr, "qjs: missing filename for -p\n");
++                exit(1);
++                continue;
++            }
++            if (!strcmp(longopt, "profile-sampling")) {
++                if (optind >= argc) {
++                    fprintf(stderr, "expecting profile sampling");
++                    exit(1);
++                }
++                profile_sampling = (uint32_t)strtod(argv[optind++], NULL);
++                continue;
++            }
++#endif
+             if (!strcmp(longopt, "std")) {
+                 load_std = 1;
+                 continue;
+@@ -451,6 +515,12 @@ int main(int argc, char **argv)
+         fprintf(stderr, "qjs: cannot allocate JS runtime\n");
+         exit(2);
+     }
++#ifdef CONFIG_PROFILE_CALLS
++    if(profile_file) {
++        JS_EnableProfileCalls(rt, profile_function_start, profile_function_end, profile_sampling, profile_file);
++        fprintf(profile_file, "{\"traceEvents\": [");
++    }
++#endif
+     if (memory_limit != 0)
+         JS_SetMemoryLimit(rt, memory_limit);
+     if (stack_size != 0)
+@@ -517,6 +587,13 @@ int main(int argc, char **argv)
+     js_std_free_handlers(rt);
+     JS_FreeContext(ctx);
+     JS_FreeRuntime(rt);
++#ifdef CONFIG_PROFILE_CALLS
++    if(profile_file) {
++        // Inject an instant event at the end just to make sure it's valid JSON.
++        fprintf(profile_file, "({\"name\": \"end\", \"ph\": \"I\", \"ts\": %ld, \"pid\": 1, \"tid\": 1, \"s\": \"g\"}]})", clock());
++        fclose(profile_file);
++    }
++#endif
+ 
+     if (empty_run && dump_memory) {
+         clock_t t[5];
+diff --git a/quickjs/quickjs/quickjs.c b/quickjs/quickjs/quickjs.c
+index fa7c24a..c565dfe 100644
+--- a/quickjs/quickjs/quickjs.c
++++ b/quickjs/quickjs/quickjs.c
+@@ -305,6 +305,15 @@ struct JSRuntime {
+     int shape_hash_size;
+     int shape_hash_count; /* number of hashed shapes */
+     JSShape **shape_hash;
++
++#ifdef CONFIG_PROFILE_CALLS
++    ProfileEventHandler *profile_function_start;
++    ProfileEventHandler *profile_function_end;
++    void *profile_opaque;
++    uint32_t profile_sampling;
++    uint32_t profile_sample_count;
++#endif
++
+     void *user_opaque;
+ };
+ 
+@@ -650,6 +659,10 @@ typedef struct JSFunctionBytecode {
+         int pc2line_len;
+         uint8_t *pc2line_buf;
+         char *source;
++#ifdef CONFIG_PROFILE_CALLS
++        /* Class.function or Object.function or just function */
++        JSAtom full_func_name_cache;
++#endif
+     } debug;
+ } JSFunctionBytecode;
+ 
+@@ -5867,8 +5880,17 @@ void __JS_FreeValueRT(JSRuntime *rt, JSValue v)
+             js_free_rt(rt, p);
+         }
+         break;
+-    case JS_TAG_OBJECT:
+-    case JS_TAG_FUNCTION_BYTECODE:
++        case JS_TAG_FUNCTION_BYTECODE:
++#ifdef CONFIG_PROFILE_CALLS
++    {
++        JSFunctionBytecode *b = JS_VALUE_GET_PTR(v);
++        // In STRICT js_mode, there is no "debug".
++        if (!(b->js_mode & JS_MODE_STRICT) && b->debug.full_func_name_cache != JS_ATOM_NULL) {
++            JS_FreeAtomRT(rt, b->debug.full_func_name_cache);
++        }
++    }
++#endif
++        case JS_TAG_OBJECT:
+     case JS_TAG_MODULE:
+         {
+             JSGCObjectHeader *p = JS_VALUE_GET_PTR(v);
+@@ -6244,6 +6266,20 @@ BOOL JS_IsLiveObject(JSRuntime *rt, JSValueConst obj)
+     return !p->free_mark;
+ }
+ 
++void JS_EnableProfileCalls(JSRuntime *rt, ProfileEventHandler *on_start, ProfileEventHandler *on_end, uint32_t sampling, void *opaque_data)
++{
++#ifdef CONFIG_PROFILE_CALLS
++    rt->profile_function_start = on_start;
++    rt->profile_function_end = on_end;
++    rt->profile_opaque = opaque_data;
++    // If sampling == 0, it's interpreted as "no sampling" which means we log 1/1 calls.
++    rt->profile_sampling = sampling > 0 ? sampling : 1;
++    rt->profile_sample_count = 0;
++#else
++    fprintf(stderr, "QuickJS was not compiled with -DCONFIG_PROFILE_CALLS. Profiling is disabled.");
++#endif
++}
++
+ /* Compute memory used by various object types */
+ /* XXX: poor man's approach to handling multiply referenced objects */
+ typedef struct JSMemoryUsage_helper {
+@@ -6902,6 +6938,65 @@ static const char *get_func_name(JSContext *ctx, JSValueConst func)
+     return JS_ToCString(ctx, val);
+ }
+ 
++/* Computes the full name of the function including the constructor of the
++   object it's being executed on, if any. For example, this may output
++   "MyClass.my_function" or if there is no "this", just "my_function". */
++static JSAtom get_full_func_name(JSContext *ctx, JSValueConst func, JSValueConst this_obj)
++{
++    JSAtom result_atom;
++    const char *func_str = get_func_name(ctx, func);
++    if (!func_str || func_str[0] == '\0') {
++        JS_FreeCString(ctx, func_str);
++        return JS_ATOM_NULL;
++    }
++    // If "this" isn't an object, return just the name.
++    if (JS_VALUE_GET_TAG(this_obj) != JS_TAG_OBJECT) {
++        result_atom = JS_NewAtom(ctx, func_str);
++        JS_FreeCString(ctx, func_str);
++        return result_atom;
++    }
++
++    JSValue ctor = JS_GetProperty(ctx, this_obj, JS_ATOM_constructor);
++    const char *ctor_str = get_func_name(ctx, ctor);
++    size_t func_len = strlen(func_str);
++    JSValue result_val;
++
++    if (ctor_str == NULL || ctor_str[0] == '\0') {
++        // Invalid constructor, use <unknown>
++        StringBuffer sb;
++        char prefix[] = "<unknown>.";
++        if (string_buffer_init2(ctx, &sb, sizeof(prefix) + func_len, 0)) {
++            JS_FreeCString(ctx, func_str);
++            JS_FreeCString(ctx, ctor_str);
++            JS_FreeValue(ctx, ctor);
++            return JS_ATOM_NULL;
++        }
++        string_buffer_write8(&sb, (const uint8_t *)prefix, sizeof(prefix));
++        string_buffer_write8(&sb, (const uint8_t *)func_str, func_len);
++        result_val = string_buffer_end(&sb);
++    } else {
++        StringBuffer sb;
++        size_t ctor_len = strlen(ctor_str);
++        if (string_buffer_init2(ctx, &sb, ctor_len + 1 + func_len, 0)) {
++            JS_FreeCString(ctx, func_str);
++            JS_FreeCString(ctx, ctor_str);
++            JS_FreeValue(ctx, ctor);
++            return JS_ATOM_NULL;
++        }
++        string_buffer_write8(&sb, (const uint8_t *)ctor_str, ctor_len);
++        string_buffer_write8(&sb, (const uint8_t *)".", 1);
++        string_buffer_write8(&sb, (const uint8_t *)func_str, func_len);
++        result_val = string_buffer_end(&sb);
++    }
++    result_atom = JS_ValueToAtom(ctx, result_val);
++    JS_FreeValue(ctx, result_val);
++    JS_FreeCString(ctx, func_str);
++    JS_FreeCString(ctx, ctor_str);
++    JS_FreeValue(ctx, ctor);
++    return result_atom;
++}
++
++
+ #define JS_BACKTRACE_FLAG_SKIP_FIRST_LEVEL (1 << 0)
+ 
+ /* if filename != NULL, an additional level is added with the filename
+@@ -16748,6 +16843,10 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
+     JSValue *local_buf, *stack_buf, *var_buf, *arg_buf, *sp, ret_val, *pval;
+     JSVarRef **var_refs;
+     size_t alloca_size;
++#ifdef CONFIG_PROFILE_CALLS
++    JSAtom full_func_name = JS_ATOM_NULL;
++    const int must_sample = rt->profile_sampling && rt->profile_sample_count == 0;
++#endif
+ 
+ #if !DIRECT_DISPATCH
+ #define SWITCH(pc)      switch (opcode = *pc++)
+@@ -16811,7 +16910,22 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
+                          (JSValueConst *)argv, flags);
+     }
+     b = p->u.func.function_bytecode;
+-
++#ifdef CONFIG_PROFILE_CALLS
++    if (unlikely(must_sample)) {
++        if (!(b->js_mode & JS_MODE_STRICT)) {
++            if (!b->debug.full_func_name_cache) {
++                b->debug.full_func_name_cache = get_full_func_name(caller_ctx, func_obj, this_obj);
++            }
++            full_func_name = b->debug.full_func_name_cache;
++        } else {
++            // Even if we can't cache it, we need to compute it to report the function execution.
++            full_func_name = get_full_func_name(caller_ctx, func_obj, this_obj);
++        }
++        if (likely(rt->profile_function_start)) {
++            rt->profile_function_start(caller_ctx, full_func_name, b->debug.filename, rt->profile_opaque);
++        }
++    }
++#endif
+     if (unlikely(argc < b->arg_count || (flags & JS_CALL_FLAG_COPY_ARGV))) {
+         arg_allocated_size = b->arg_count;
+     } else {
+@@ -19378,6 +19492,20 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
+         }
+     }
+     rt->current_stack_frame = sf->prev_frame;
++#ifdef CONFIG_PROFILE_CALLS
++    if (unlikely(must_sample)) {
++        if (likely(rt->profile_function_end)) {
++            rt->profile_function_end(caller_ctx, full_func_name, b->debug.filename, rt->profile_opaque);
++        }
++        if (b->js_mode & JS_MODE_STRICT) {
++            // If we weren't able to cache it, we have to free it right away (and sadly recreate it later).
++            JS_FreeAtom(caller_ctx, full_func_name);
++        }
++    }
++    if (unlikely(rt->profile_sampling)) {
++        rt->profile_sample_count = (rt->profile_sample_count + 1) % rt->profile_sampling;
++    }
++#endif
+     return ret_val;
+ }
+ 
+diff --git a/quickjs/quickjs/quickjs.h b/quickjs/quickjs/quickjs.h
+index 2083f73..e3e3784 100644
+--- a/quickjs/quickjs/quickjs.h
++++ b/quickjs/quickjs/quickjs.h
+@@ -383,6 +383,31 @@ void JS_MarkValue(JSRuntime *rt, JSValueConst val, JS_MarkFunc *mark_func);
+ void JS_RunGC(JSRuntime *rt);
+ JS_BOOL JS_IsLiveObject(JSRuntime *rt, JSValueConst obj);
+ 
++/**
++ * Callback function type for handling JavaScript profiling events.
++ *
++ * @param func        Function name as a JSAtom. May be in the format "Constructor.name"
++ *                    when the function is executed in a constructor's context (i.e.,
++ *                    with 'this' binding)
++ * @param filename    Name of the source file containing the function, as a JSAtom
++ * @param opaque_data User data that was originally passed to JS_EnableProfileCalls.
++ *                    Same value is provided to both start and end handlers
++ */
++typedef void ProfileEventHandler(JSContext *ctx, JSAtom func, JSAtom filename, void *opaque_data);
++/**
++ * Enables function call profiling for the JavaScript runtime.
++ *
++ * NOTE: This function only works if QuickJS was compiled with -DCONFIG_PROFILE_CALLS flag.
++ *
++ * @param on_start    Callback called when a function starts.
++ * @param on_end      Callback called when a function ends.
++ * @param sampling    Controls profiling frequency: only 1/sampling function calls are
++ *                    instrumented. Must be ≥ 1. Example: if sampling=4, only 25% of
++ *                    function calls will trigger the handlers.
++ * @param opaque_data Optional user data passed to both handlers. Can be NULL.
++ */
++void JS_EnableProfileCalls(JSRuntime *rt, ProfileEventHandler *on_start, ProfileEventHandler *on_end, uint32_t sampling, void *opaque_data);
++
+ JSContext *JS_NewContext(JSRuntime *rt);
+ void JS_FreeContext(JSContext *s);
+ JSContext *JS_DupContext(JSContext *ctx);
