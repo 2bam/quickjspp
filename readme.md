@@ -1,3 +1,28 @@
+# In this fork
+
+## Update QuickJS dependency to version 2025-04-26. 
+
+Fix module loading to keep old API semantics.
+-  In quickjs, now modules that fail to load do not return a JS_EXCEPTION but a
+   rejected promise. Added handling in quickjspp in order to maintain the
+   previous expected API which throws a qjs::exception on eval failure
+   (`exception.cpp` test)
+
+Fix null context access.
+ - Added a JS_RunGC at the qjs::Context dtor, otherwise the unhandled rejections
+   called upon finalization tried to access the opaque value of an already freed
+   JSContext.
+ 
+Fix quickjspp code and cmake issues.  
+Update git patches to match new version of quicks.  
+Remove bignum support (removed from QuickJS).  
+Add QuickJS LICENSE file.  
+
+Update QuickJS to match https://github.com/bellard/quickjs/ master.  
+Commit date Sat Jun 28 17:41:58 2025 +0200  
+Commit hash 458c34d29d0d262f824ea1c0e01aa0e3790669da  
+
+# Original README
 QuickJSPP is QuickJS wrapper for C++. It allows you to easily embed Javascript engine into your program.
 
 QuickJS is a small and embeddable Javascript engine. It supports the ES2020 specification including modules, asynchronous generators and proxies. More info: <https://bellard.org/quickjs/>
