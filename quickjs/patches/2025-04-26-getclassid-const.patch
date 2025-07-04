@@ -1,7 +1,7 @@
-diff --git a/quickjs/quickjs/quickjs.c b/quickjs/quickjs/quickjs.c
+diff --git a/quickjs/quickjs.c b/quickjs/quickjs.c
 index fa7c24a..0535169 100644
---- a/quickjs/quickjs/quickjs.c
-+++ b/quickjs/quickjs/quickjs.c
+--- a/quickjs/quickjs.c
++++ b/quickjs/quickjs.c
 @@ -3320,7 +3320,7 @@ JSClassID JS_NewClassID(JSClassID *pclass_id)
      return class_id;
  }
@@ -11,10 +11,10 @@ index fa7c24a..0535169 100644
  {
      JSObject *p;
      if (JS_VALUE_GET_TAG(v) != JS_TAG_OBJECT)
-diff --git a/quickjs/quickjs/quickjs.h b/quickjs/quickjs/quickjs.h
+diff --git a/quickjs/quickjs.h b/quickjs/quickjs.h
 index 2083f73..80aacc4 100644
---- a/quickjs/quickjs/quickjs.h
-+++ b/quickjs/quickjs/quickjs.h
+--- a/quickjs/quickjs.h
++++ b/quickjs/quickjs.h
 @@ -544,7 +544,7 @@ typedef struct JSClassDef {
  #define JS_INVALID_CLASS_ID 0
  JSClassID JS_NewClassID(JSClassID *pclass_id);

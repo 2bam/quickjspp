@@ -1,7 +1,7 @@
-diff --git a/quickjs/quickjs/quickjs.c b/quickjs/quickjs/quickjs.c
+diff --git a/quickjs/quickjs.c b/quickjs/quickjs.c
 index 325c6dd..0535169 100644
---- a/quickjs/quickjs/quickjs.c
-+++ b/quickjs/quickjs/quickjs.c
+--- a/quickjs/quickjs.c
++++ b/quickjs/quickjs.c
 @@ -278,6 +278,9 @@ struct JSRuntime {
      JSHostPromiseRejectionTracker *host_promise_rejection_tracker;
      void *host_promise_rejection_tracker_opaque;
@@ -58,10 +58,10 @@ index 325c6dd..0535169 100644
      s->promise_state = JS_PROMISE_PENDING;
      s->is_handled = FALSE;
      for(i = 0; i < 2; i++)
-diff --git a/quickjs/quickjs/quickjs.h b/quickjs/quickjs/quickjs.h
+diff --git a/quickjs/quickjs.h b/quickjs/quickjs.h
 index 4570c6d..80aacc4 100644
---- a/quickjs/quickjs/quickjs.h
-+++ b/quickjs/quickjs/quickjs.h
+--- a/quickjs/quickjs.h
++++ b/quickjs/quickjs.h
 @@ -912,6 +912,7 @@ typedef void JSHostPromiseRejectionTracker(JSContext *ctx, JSValueConst promise,
                                             JSValueConst reason,
                                             JS_BOOL is_handled, void *opaque);
